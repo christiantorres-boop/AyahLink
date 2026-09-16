@@ -1,69 +1,84 @@
-import Image from "next/image";
+import { ProcessorForm } from "@/components/ProcessorForm";
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
+    <main className="page">
+      <section className="hero">
+        <header className="nav">
+          <div className="brand">AyahLink</div>
+          <a className="nav-cta" href="#start">
+            Start here
           </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+        </header>
+
+        <div className="hero-stage">
+          <div className="hero-copy">
+            <p className="hero-arabic" dir="rtl" lang="ar">
+              وَرَتِّلِ الْقُرْآنَ تَرْتِيلًا
+            </p>
+            <h1>AyahLink</h1>
+            <p>
+              Upload your Qur’an recording. We add clear English after every
+              verse, so you can listen and understand, one ayah at a time.
+            </p>
+            <div className="hero-actions">
+              <a className="primary-btn" href="#start">
+                Make my audio
+              </a>
+              <a className="ghost-btn" href="#simple-steps">
+                Show me how (3 steps)
+              </a>
+            </div>
+          </div>
         </div>
-      </main>
-    </div>
+      </section>
+
+      <section id="simple-steps" className="explain-band" aria-label="How it works">
+        <h2>How it works</h2>
+        <p className="explain-lead">
+          You do not need any technical knowledge. Just follow these three steps.
+        </p>
+        <ol className="explain-steps">
+          <li>
+            <span className="step-num" aria-hidden="true">
+              1
+            </span>
+            <div>
+              <strong>Upload your recording</strong>
+              <p>Pick an MP3 or MP4 of someone reciting the Qur’an.</p>
+            </div>
+          </li>
+          <li>
+            <span className="step-num" aria-hidden="true">
+              2
+            </span>
+            <div>
+              <strong>Tell us which verses</strong>
+              <p>Choose the Surah and which ayahs are in that file.</p>
+            </div>
+          </li>
+          <li>
+            <span className="step-num" aria-hidden="true">
+              3
+            </span>
+            <div>
+              <strong>Download your new file</strong>
+              <p>
+                You get one audio: Arabic → English → Arabic → English…
+              </p>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <ProcessorForm />
+
+      <footer className="site-footer">
+        <p>
+          Tip: Use a clear recording with short pauses between verses for the
+          best result. Need help? Start with Surah Al-Fatihah (1) ayahs 1-7.
+        </p>
+      </footer>
+    </main>
   );
 }

@@ -1,0 +1,12 @@
+const fs = require("fs");
+const path = "c:/New/src/app/globals.css";
+let s = fs.readFileSync(path, "latin1");
+s = s.replace(/\u0097/g, "-");
+s = s.replace(/\u0096/g, "-");
+s = s.replace(/\u2014/g, "-");
+s = s.replace(/\u2013/g, "-");
+s = s.replace(/[\u0080-\u009F]/g, "");
+fs.writeFileSync(path, s, "utf8");
+const nb = fs.readFileSync(path);
+new TextDecoder("utf-8", { fatal: true }).decode(nb);
+console.log("fixed ok, len", nb.length);
