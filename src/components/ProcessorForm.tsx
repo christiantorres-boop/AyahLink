@@ -35,6 +35,12 @@ function formatBytes(bytes: number) {
 
 function friendlyError(raw: string) {
   const lower = raw.toLowerCase();
+  if (
+    lower.includes("did not match the expected pattern") ||
+    lower.includes("pattern")
+  ) {
+    return "Please type verse numbers as normal numbers (example: 6, not 06), and use an MP3 or M4A recording.";
+  }
   if (lower.includes("openai") || lower.includes("api key")) {
     return "Something went wrong with the voice service. Please try again in a minute.";
   }
@@ -42,11 +48,18 @@ function friendlyError(raw: string) {
     return "Audio tools are still starting. Please wait a moment and try again.";
   }
   if (lower.includes("file")) {
-    return "We could not read that file. Please try an MP3 or MP4 under 100 MB.";
+    return "We could not read that file. Please try an MP3 or M4A under 25 MB.";
   }
   return raw.length > 140
     ? "Something went wrong. Please check your file and verse numbers, then try again."
     : raw;
+}
+
+function parseVerseNumber(raw: string, fallback: number) {
+  const digits = raw.replace(/[^\d]/g, "");
+  if (!digits) return fallback;
+  const n = Number.parseInt(digits, 10);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
 export function ProcessorForm() {
@@ -159,13 +172,24 @@ export function ProcessorForm() {
   function pickFile(next: File | null) {
     if (!next) return;
     const name = next.name.toLowerCase();
-    const ok =
+    const type = (next.type || "").toLowerCase();
+    const okExt =
       name.endsWith(".mp3") ||
       name.endsWith(".mp4") ||
       name.endsWith(".wav") ||
-      name.endsWith(".m4a");
-    if (!ok) {
-      setError("Please choose an audio or video file: MP3, MP4, WAV, or M4A.");
+      name.endsWith(".m4a") ||
+      name.endsWith(".aac") ||
+      name.endsWith(".caf") ||
+      name.endsWith(".mov") ||
+      name.endsWith(".mpeg") ||
+      name.endsWith(".mpg");
+    const okType =
+      type.startsWith("audio/") ||
+      type.startsWith("video/") ||
+      type === "application/octet-stream" ||
+      type === "";
+    if (!okExt && !okType) {
+      setError("Please choose an audio/video recording (MP3, M4A, WAV, or MP4).");
       return;
     }
     if (next.size > 25 * 1024 * 1024) {
@@ -182,20 +206,19 @@ export function ProcessorForm() {
     e.preventDefault();
     setError(null);
 
+    const start = Math.max(1, Math.min(maxAyah, Number(startAyah) || 1));
+    const end = Math.max(1, Math.min(maxAyah, Number(endAyah) || start));
+    setStartAyah(start);
+    setEndAyah(end);
+
     if (!file) {
       setError("Step 1 is missing: please choose your recording first.");
       fileInputRef.current?.focus();
       return;
     }
-    if (endAyah < startAyah) {
+    if (end < start) {
       setError(
         "The ending verse number must be the same as or after the starting verse.",
-      );
-      return;
-    }
-    if (startAyah < 1 || endAyah > maxAyah) {
-      setError(
-        `For ${selectedSurah?.englishName ?? "this Surah"}, verse numbers must be between 1 and ${maxAyah}.`,
       );
       return;
     }
@@ -215,8 +238,8 @@ export function ProcessorForm() {
       const body = new FormData();
       body.append("file", file);
       body.append("surah", String(surah));
-      body.append("startAyah", String(startAyah));
-      body.append("endAyah", String(endAyah));
+      body.append("startAyah", String(start));
+      body.append("endAyah", String(end));
       body.append("translationEdition", edition);
 
       const res = await fetch("/api/process", { method: "POST", body });
@@ -272,7 +295,7 @@ export function ProcessorForm() {
         </p>
       </div>
 
-      <form className="processor" onSubmit={onSubmit}>
+      <form className="processor" onSubmit={onSubmit} noValidate>
         <fieldset className="step-card" disabled={busy}>
           <legend>
             <span className="badge">Step 1</span>
@@ -309,7 +332,7 @@ export function ProcessorForm() {
             <input
               ref={fileInputRef}
               type="file"
-              accept=".mp3,.mp4,.wav,.m4a,audio/*,video/mp4"
+              accept="audio/*,video/*,.mp3,.mp4,.m4a,.wav,.aac,.caf,.mov"
               className="sr-only"
               onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
             />
@@ -371,23 +394,25 @@ export function ProcessorForm() {
             <label className="field">
               <span>First verse number</span>
               <input
-                type="number"
+                type="text"
                 inputMode="numeric"
-                min={1}
-                max={maxAyah}
-                value={startAyah}
-                onChange={(e) => setStartAyah(Number(e.target.value))}
+                autoComplete="off"
+                value={String(startAyah)}
+                onChange={(e) =>
+                  setStartAyah(parseVerseNumber(e.target.value, startAyah))
+                }
               />
             </label>
             <label className="field">
               <span>Last verse number</span>
               <input
-                type="number"
+                type="text"
                 inputMode="numeric"
-                min={1}
-                max={maxAyah}
-                value={endAyah}
-                onChange={(e) => setEndAyah(Number(e.target.value))}
+                autoComplete="off"
+                value={String(endAyah)}
+                onChange={(e) =>
+                  setEndAyah(parseVerseNumber(e.target.value, endAyah))
+                }
               />
             </label>
           </div>
