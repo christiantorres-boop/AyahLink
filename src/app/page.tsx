@@ -53,8 +53,10 @@ export default function Home() {
               2
             </span>
             <div>
-              <strong>Tell us which verses</strong>
-              <p>Choose the Surah and which ayahs are in that file.</p>
+              <strong>We detect the verses</strong>
+              <p>
+                AyahLink listens and figures out the Surah and ayahs for you.
+              </p>
             </div>
           </li>
           <li>
@@ -75,8 +77,8 @@ export default function Home() {
 
       <footer className="site-footer">
         <p>
-          Tip: Use a clear recording with short pauses between verses for the
-          best result. Need help? Start with Surah Al-Fatihah (1) ayahs 1-7.
+          Tip: Use a clear recording of one Surah with short pauses between
+          verses for the best result. Need help? Try Surah Al-Fatihah.
         </p>
       </footer>
     </main>

@@ -14,6 +14,9 @@ type JobView = {
   resultFileName?: string;
   resultUrl?: string;
   audioUrl?: string;
+  surah?: number;
+  startAyah?: number;
+  endAyah?: number;
   segments?: Array<{
     surah: number;
     ayah: number;
@@ -37,14 +40,13 @@ function formatBytes(bytes: number) {
 
 function friendlyError(raw: string) {
   const lower = raw.toLowerCase();
-  if (
-    lower.includes("did not match the expected pattern") ||
-    lower.includes("pattern")
-  ) {
-    return "Please type verse numbers as normal numbers (example: 6, not 06), and use an MP3 or M4A recording.";
-  }
   if (lower.includes("openai") || lower.includes("api key")) {
-    return "Something went wrong with the voice service. Please try again in a minute.";
+    return "Verse recognition needs an OpenAI API key on the server. Please ask the site owner to add OPENAI_API_KEY.";
+  }
+  if (lower.includes("recognize") || lower.includes("could not hear")) {
+    return raw.length > 160
+      ? "We could not tell which verses are in that recording. Try a clearer, shorter clip of one Surah."
+      : raw;
   }
   if (lower.includes("ffprobe") || lower.includes("ffmpeg")) {
     return "Audio tools are still starting. Please wait a moment and try again.";
@@ -56,7 +58,7 @@ function friendlyError(raw: string) {
     return "The server finished, but this phone lost the job link. Please try once more.";
   }
   return raw.length > 140
-    ? "Something went wrong. Please check your file and verse numbers, then try again."
+    ? "Something went wrong. Please try a clearer short recording and try again."
     : raw;
 }
 
@@ -75,18 +77,8 @@ function resolveDownloadUrl(job: JobView) {
   return job.audioUrl || job.resultUrl || `/api/download/${job.id}`;
 }
 
-function parseVerseNumber(raw: string, fallback: number) {
-  const digits = raw.replace(/[^\d]/g, "");
-  if (!digits) return fallback;
-  const n = Number.parseInt(digits, 10);
-  return Number.isFinite(n) && n > 0 ? n : fallback;
-}
-
 export function ProcessorForm() {
   const [surahs, setSurahs] = useState<SurahMeta[]>([]);
-  const [surah, setSurah] = useState(1);
-  const [startAyah, setStartAyah] = useState(1);
-  const [endAyah, setEndAyah] = useState(7);
   const [edition, setEdition] = useState("20");
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
@@ -106,14 +98,8 @@ export function ProcessorForm() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Could not load Surah list");
         if (!cancelled) setSurahs(data.surahs);
-      } catch (err) {
-        if (!cancelled) {
-          setError(
-            err instanceof Error
-              ? friendlyError(err.message)
-              : "Could not load Surah list. Check your internet and refresh.",
-          );
-        }
+      } catch {
+        // Surah names are only used for display after detection
       }
     })();
     return () => {
@@ -121,18 +107,31 @@ export function ProcessorForm() {
     };
   }, []);
 
-  const selectedSurah = useMemo(
-    () => surahs.find((s) => s.number === surah),
-    [surahs, surah],
-  );
+  const detectedSurah = useMemo(() => {
+    const num = job?.surah || job?.segments?.[0]?.surah;
+    if (!num) return null;
+    return surahs.find((s) => s.number === num) ?? null;
+  }, [job, surahs]);
 
-  const maxAyah = selectedSurah?.numberOfAyahs ?? 286;
-  const ayahCount = Math.max(0, endAyah - startAyah + 1);
+  const ayahCount = useMemo(() => {
+    if (job?.segments?.length) return job.segments.length;
+    if (job?.startAyah && job?.endAyah) {
+      return Math.max(0, job.endAyah - job.startAyah + 1);
+    }
+    return 0;
+  }, [job]);
 
-  useEffect(() => {
-    setStartAyah(1);
-    setEndAyah(Math.min(7, maxAyah));
-  }, [surah, maxAyah]);
+  const surahLabel = useMemo(() => {
+    if (detectedSurah) {
+      const range =
+        job?.startAyah && job?.endAyah
+          ? ` ${job.startAyah}-${job.endAyah}`
+          : "";
+      return `${detectedSurah.englishName}${range}`;
+    }
+    if (job?.surah) return `Surah ${job.surah}`;
+    return "Detecting…";
+  }, [detectedSurah, job]);
 
   useEffect(() => {
     if (!job || job.id !== "pending") return;
@@ -144,10 +143,10 @@ export function ProcessorForm() {
           ...prev,
           progress: next,
           message:
-            next < 30
+            next < 25
               ? "Uploading your file..."
-              : next < 60
-                ? "Processing your recording (this can take a few minutes)..."
+              : next < 50
+                ? "Recognizing which Surah and verses you recited..."
                 : "Still working - creating Arabic + English audio...",
         };
       });
@@ -226,20 +225,9 @@ export function ProcessorForm() {
     e.preventDefault();
     setError(null);
 
-    const start = Math.max(1, Math.min(maxAyah, Number(startAyah) || 1));
-    const end = Math.max(1, Math.min(maxAyah, Number(endAyah) || start));
-    setStartAyah(start);
-    setEndAyah(end);
-
     if (!file) {
       setError("Step 1 is missing: please choose your recording first.");
       fileInputRef.current?.focus();
-      return;
-    }
-    if (end < start) {
-      setError(
-        "The ending verse number must be the same as or after the starting verse.",
-      );
       return;
     }
 
@@ -257,16 +245,12 @@ export function ProcessorForm() {
     try {
       const body = new FormData();
       body.append("file", file);
-      body.append("surah", String(surah));
-      body.append("startAyah", String(start));
-      body.append("endAyah", String(end));
       body.append("translationEdition", edition);
 
       const res = await fetch("/api/process", { method: "POST", body });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Could not start. Please try again.");
 
-      // Vercel runs the job in this same request and returns the finished job
       if (data.mode === "sync" && data.job) {
         const finished = data.job as JobView;
         if (data.audioBase64 && typeof data.audioBase64 === "string") {
@@ -281,11 +265,12 @@ export function ProcessorForm() {
               block: "center",
             });
           }, 400);
+        } else if (finished.status === "failed") {
+          setError(friendlyError(finished.error || "Could not finish."));
         }
         return;
       }
 
-      // Local/async: poll job status
       const statusRes = await fetch(`/api/jobs/${data.jobId}`);
       const statusData = await statusRes.json();
       if (statusRes.ok) {
@@ -329,8 +314,8 @@ export function ProcessorForm() {
         <p className="eyebrow">Let’s make your file</p>
         <h2 id="workspace-title">Follow the steps below</h2>
         <p>
-          Fill each box. When you are done, tap the big green button. We will do
-          the hard work for you.
+          Upload a recording. We will detect the Surah and verses, then add
+          English after each ayah.
         </p>
       </div>
 
@@ -342,7 +327,8 @@ export function ProcessorForm() {
           </legend>
           <p className="hint">
             This is the audio or video where someone is reciting in Arabic.
-            Phone recordings are fine.
+            Phone recordings are fine. Best results: one clear Surah with short
+            pauses between verses.
           </p>
 
           <div
@@ -397,78 +383,6 @@ export function ProcessorForm() {
         <fieldset className="step-card" disabled={busy}>
           <legend>
             <span className="badge">Step 2</span>
-            Which verses are in this recording?
-          </legend>
-          <p className="hint">
-            Match what is actually recited in your file. Example: if the file is
-            all of Al-Fatihah, choose Surah 1, verses 1 to 7.
-          </p>
-
-          <label className="field">
-            <span>Surah (chapter)</span>
-            <select
-              value={surah}
-              onChange={(e) => setSurah(Number(e.target.value))}
-              disabled={!surahs.length}
-              aria-describedby="surah-help"
-            >
-              {!surahs.length ? (
-                <option>Loading Surah list…</option>
-              ) : (
-                surahs.map((s) => (
-                  <option key={s.number} value={s.number}>
-                    {s.number}. {s.englishName} - {s.numberOfAyahs} verses
-                  </option>
-                ))
-              )}
-            </select>
-            <small id="surah-help" className="field-help">
-              {selectedSurah
-                ? `${selectedSurah.englishName} has ${selectedSurah.numberOfAyahs} verses total.`
-                : "Loading…"}
-            </small>
-          </label>
-
-          <div className="grid-2">
-            <label className="field">
-              <span>First verse number</span>
-              <input
-                type="text"
-                inputMode="numeric"
-                autoComplete="off"
-                value={String(startAyah)}
-                onChange={(e) =>
-                  setStartAyah(parseVerseNumber(e.target.value, startAyah))
-                }
-              />
-            </label>
-            <label className="field">
-              <span>Last verse number</span>
-              <input
-                type="text"
-                inputMode="numeric"
-                autoComplete="off"
-                value={String(endAyah)}
-                onChange={(e) =>
-                  setEndAyah(parseVerseNumber(e.target.value, endAyah))
-                }
-              />
-            </label>
-          </div>
-
-          <p className="summary-chip" aria-live="polite">
-            You selected <strong>{ayahCount}</strong> verse
-            {ayahCount === 1 ? "" : "s"}
-            {selectedSurah
-              ? ` from ${selectedSurah.englishName} (${startAyah}-${endAyah})`
-              : ""}
-            .
-          </p>
-        </fieldset>
-
-        <fieldset className="step-card" disabled={busy}>
-          <legend>
-            <span className="badge">Step 3</span>
             Which English translation?
           </legend>
           <p className="hint">
@@ -489,16 +403,16 @@ export function ProcessorForm() {
 
         <div className="step-card action-card">
           <p className="badge-inline">
-            <span className="badge">Step 4</span> Create your file
+            <span className="badge">Step 3</span> Create your file
           </p>
           <p className="hint tight">
-            This can take a few minutes for longer recordings. Keep this page
-            open.
+            We will automatically recognize the Surah and verses from your
+            recording. Keep this page open.
           </p>
           <button
             className="primary-btn full"
             type="submit"
-            disabled={busy || !surahs.length}
+            disabled={busy}
           >
             {busy ? "Please wait - working..." : "Create my Arabic + English audio"}
           </button>
@@ -517,7 +431,7 @@ export function ProcessorForm() {
         downloadHref={job ? resolveDownloadUrl(job) : undefined}
         startedAt={startedAt}
         ayahCount={ayahCount}
-        surahLabel={selectedSurah?.englishName ?? `Surah ${surah}`}
+        surahLabel={surahLabel}
         onCloseSuccess={() => setModalOpen(false)}
         onRetry={resetJob}
       />
@@ -527,8 +441,8 @@ export function ProcessorForm() {
           <div className="success-box">
             <h3>Your file is ready</h3>
             <p>
-              Listen first. You should hear Arabic, then English, then the next
-              verse.
+              Detected {surahLabel}. Listen first. You should hear Arabic, then
+              English, then the next verse.
             </p>
             <audio
               className="preview-audio"

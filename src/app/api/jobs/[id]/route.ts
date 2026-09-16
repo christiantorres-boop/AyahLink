@@ -25,6 +25,9 @@ export async function GET(
     error: job.error,
     resultFileName: job.resultFileName,
     resultUrl: job.resultUrl,
+    surah: job.surah,
+    startAyah: job.startAyah,
+    endAyah: job.endAyah,
     segments: job.segments?.map((s) => ({
       surah: s.surah,
       ayah: s.ayah,

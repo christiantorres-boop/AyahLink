@@ -7,10 +7,11 @@ import {
   cutSegment,
   extractAudioToWav,
 } from "./media";
-import { getAyahRange } from "./quran-com";
+import { getAyahRange, listSurahs } from "./quran-com";
 import { synthesizeTranslationMp3 } from "./tts";
 import { saveResultBuffer } from "./result-store";
 import { saveAudioBlob, saveJobBlob } from "./blob-store";
+import { recognizeRecitation } from "./recognize";
 
 export async function runProcessingJob(
   jobId: string,
@@ -32,16 +33,43 @@ export async function runProcessingJob(
     const job = await getJob(jobId);
     if (!job) throw new Error("Job missing during processing");
 
-    await updateJob(jobId, {
-      step: "fetching_ayahs",
-      progress: 18,
-      message: "Looking up the English meanings...",
-    });
+    let surah = job.surah;
+    let startAyah = job.startAyah;
+    let endAyah = job.endAyah;
+
+    // 0 / missing range means: detect Surah + ayahs from the audio
+    if (!surah || !startAyah || !endAyah || endAyah < startAyah) {
+      await updateJob(jobId, {
+        step: "detecting_ayahs",
+        progress: 15,
+        message: "Recognizing which Surah and verses are in your recording...",
+      });
+
+      const detected = await recognizeRecitation(wavPath);
+      surah = detected.surah;
+      startAyah = detected.startAyah;
+      endAyah = detected.endAyah;
+
+      await updateJob(jobId, {
+        surah,
+        startAyah,
+        endAyah,
+        progress: 22,
+        message: `Detected ${detected.surahName}, verses ${startAyah}-${endAyah}. Looking up English meanings...`,
+        step: "fetching_ayahs",
+      });
+    } else {
+      await updateJob(jobId, {
+        step: "fetching_ayahs",
+        progress: 18,
+        message: "Looking up the English meanings...",
+      });
+    }
 
     const ayahs = await getAyahRange(
-      job.surah,
-      job.startAyah,
-      job.endAyah,
+      surah,
+      startAyah,
+      endAyah,
       job.translationEdition,
     );
 
@@ -49,10 +77,14 @@ export async function runProcessingJob(
       throw new Error("No ayahs found for the selected range");
     }
 
+    const surahs = await listSurahs();
+    const surahName =
+      surahs.find((s) => s.number === surah)?.englishName ?? `Surah ${surah}`;
+
     await updateJob(jobId, {
-      step: "detecting_ayahs",
+      step: "fetching_ayahs",
       progress: 30,
-      message: "Finding where each verse starts and ends...",
+      message: `Finding where each verse starts and ends in ${surahName}...`,
     });
 
     const { segments } = await detectAyahSegments(wavPath, ayahs);
@@ -93,7 +125,7 @@ export async function runProcessingJob(
       message: "Joining Arabic and English into one file...",
     });
 
-    const resultName = `ayahlink-${job.surah}_${job.startAyah}-${job.endAyah}.mp3`;
+    const resultName = `ayahlink-${surah}_${startAyah}-${endAyah}.mp3`;
     const resultPath = path.join(workDir, resultName);
     await concatMp3Files(clipPaths, resultPath);
 
@@ -104,8 +136,10 @@ export async function runProcessingJob(
       status: "completed",
       step: "finalizing",
       progress: 100,
-      message:
-        "Done! Tip: use a short clear recitation of only those verses.",
+      message: `Done! Detected ${surahName}, verses ${startAyah}-${endAyah}.`,
+      surah,
+      startAyah,
+      endAyah,
       resultPath,
       resultFileName: resultName,
       resultUrl: resultUrl ?? undefined,

@@ -13,9 +13,6 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 const formSchema = z.object({
-  surah: z.coerce.number().int().min(1).max(114),
-  startAyah: z.coerce.number().int().min(1),
-  endAyah: z.coerce.number().int().min(1),
   translationEdition: z.string().default("20"),
 });
 
@@ -36,6 +33,9 @@ function publicJob(job: NonNullable<Awaited<ReturnType<typeof getJob>>>) {
       endSec: s.endSec,
       translation: s.translation,
     })),
+    surah: job.surah,
+    startAyah: job.startAyah,
+    endAyah: job.endAyah,
   };
 }
 
@@ -54,9 +54,6 @@ export async function POST(request: Request) {
     }
 
     const parsed = formSchema.safeParse({
-      surah: form.get("surah"),
-      startAyah: form.get("startAyah"),
-      endAyah: form.get("endAyah"),
       translationEdition: form.get("translationEdition") ?? "20",
     });
 
@@ -67,13 +64,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { surah, startAyah, endAyah, translationEdition } = parsed.data;
-    if (endAyah < startAyah) {
-      return NextResponse.json(
-        { error: "endAyah must be greater than or equal to startAyah" },
-        { status: 400 },
-      );
-    }
+    const { translationEdition } = parsed.data;
 
     const allowed = [
       "audio/mpeg",
@@ -125,9 +116,9 @@ export async function POST(request: Request) {
 
     const job = await createJob({
       id: jobId,
-      surah,
-      startAyah,
-      endAyah,
+      surah: 0,
+      startAyah: 0,
+      endAyah: 0,
       translationEdition,
     });
 

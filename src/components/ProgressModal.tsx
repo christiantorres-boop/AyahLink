@@ -29,14 +29,14 @@ const PIPELINE_STEPS: Array<{ id: string; label: string; detail: string }> = [
     detail: "Opening the audio so we can work with it",
   },
   {
+    id: "detecting_ayahs",
+    label: "Recognize Surah and verses",
+    detail: "Listening to figure out which ayahs you recited",
+  },
+  {
     id: "fetching_ayahs",
     label: "Get English meanings",
     detail: "Looking up each verse translation",
-  },
-  {
-    id: "detecting_ayahs",
-    label: "Find verse boundaries",
-    detail: "Figuring out where each ayah starts and ends",
   },
   {
     id: "generating_tts",
