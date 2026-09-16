@@ -3,6 +3,7 @@ import path from "path";
 import type { ProcessJob } from "./types";
 import { getJobsRoot } from "./paths";
 import { getStoredJob } from "./result-store";
+import { loadJobBlob } from "./blob-store";
 
 const jobs = new Map<string, ProcessJob>();
 
@@ -75,6 +76,12 @@ export async function getJob(id: string): Promise<ProcessJob | null> {
   if (fromMemory) {
     jobs.set(id, fromMemory);
     return fromMemory;
+  }
+
+  const fromBlob = await loadJobBlob(id);
+  if (fromBlob) {
+    jobs.set(id, fromBlob);
+    return fromBlob;
   }
 
   try {

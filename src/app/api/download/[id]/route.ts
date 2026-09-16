@@ -29,6 +29,10 @@ export async function GET(
   }
 
   const job = await getJob(id);
+  if (job?.resultUrl) {
+    return NextResponse.redirect(job.resultUrl, 302);
+  }
+
   if (!job || job.status !== "completed" || !job.resultPath) {
     return NextResponse.json({ error: "Result not ready" }, { status: 404 });
   }

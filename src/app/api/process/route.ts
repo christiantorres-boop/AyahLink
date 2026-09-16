@@ -3,9 +3,10 @@ import { promises as fs } from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
 import { z } from "zod";
-import { cleanupOldJobs, createJob, getJobWorkDir } from "@/lib/jobs";
+import { cleanupOldJobs, createJob, getJob, getJobWorkDir } from "@/lib/jobs";
 import { runProcessingJob } from "@/lib/pipeline";
 import { isVercel } from "@/lib/paths";
+import { getResultBuffer } from "@/lib/result-store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,6 +18,26 @@ const formSchema = z.object({
   endAyah: z.coerce.number().int().min(1),
   translationEdition: z.string().default("20"),
 });
+
+function publicJob(job: NonNullable<Awaited<ReturnType<typeof getJob>>>) {
+  return {
+    id: job.id,
+    status: job.status,
+    step: job.step,
+    progress: job.progress,
+    message: job.message,
+    error: job.error,
+    resultFileName: job.resultFileName,
+    resultUrl: job.resultUrl,
+    segments: job.segments?.map((s) => ({
+      surah: s.surah,
+      ayah: s.ayah,
+      startSec: s.startSec,
+      endSec: s.endSec,
+      translation: s.translation,
+    })),
+  };
+}
 
 export async function POST(request: Request) {
   try {
@@ -69,16 +90,18 @@ export async function POST(request: Request) {
       lowerName.endsWith(".mp3") ||
       lowerName.endsWith(".mp4") ||
       lowerName.endsWith(".wav") ||
-      lowerName.endsWith(".m4a");
+      lowerName.endsWith(".m4a") ||
+      lowerName.endsWith(".aac") ||
+      lowerName.endsWith(".caf") ||
+      lowerName.endsWith(".mov");
 
-    if (!extOk && !allowed.includes(file.type)) {
+    if (!extOk && !allowed.includes(file.type) && file.type !== "") {
       return NextResponse.json(
         { error: "Only MP3, MP4, WAV, or M4A uploads are supported" },
         { status: 400 },
       );
     }
 
-    // Keep cloud demos short so Vercel can finish within time limits
     const maxBytes = isVercel() ? 25 * 1024 * 1024 : 100 * 1024 * 1024;
     if (file.size > maxBytes) {
       return NextResponse.json(
@@ -109,12 +132,24 @@ export async function POST(request: Request) {
     });
 
     if (isVercel()) {
-      // Serverless: must finish in this request or files are lost
       await runProcessingJob(jobId, sourcePath);
-      return NextResponse.json({ jobId: job.id, mode: "sync" });
+      const finished = await getJob(jobId);
+      const stored = getResultBuffer(jobId);
+
+      // Include small audio inline so preview/download works across serverless instances
+      let audioBase64: string | undefined;
+      if (stored && stored.buffer.byteLength <= 3_500_000) {
+        audioBase64 = stored.buffer.toString("base64");
+      }
+
+      return NextResponse.json({
+        jobId: job.id,
+        mode: "sync",
+        job: finished ? publicJob(finished) : null,
+        audioBase64,
+      });
     }
 
-    // Local/dev: process in background and let the UI poll
     after(() => runProcessingJob(jobId, sourcePath));
     return NextResponse.json({ jobId: job.id, mode: "async" });
   } catch (err) {

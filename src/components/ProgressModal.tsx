@@ -73,6 +73,8 @@ function stepIndex(step: string) {
 type Props = {
   open: boolean;
   job: ProgressJob | null;
+  audioSrc?: string;
+  downloadHref?: string;
   startedAt: number | null;
   ayahCount: number;
   surahLabel: string;
@@ -83,6 +85,8 @@ type Props = {
 export function ProgressModal({
   open,
   job,
+  audioSrc,
+  downloadHref,
   startedAt,
   ayahCount,
   surahLabel,
@@ -139,7 +143,8 @@ export function ProgressModal({
         })()
       : job.message || "Working on your audio…";
 
-  const previewUrl = `/api/download/${job.id}?preview=1`;
+  const previewUrl = audioSrc || `/api/download/${job.id}?preview=1`;
+  const downloadUrl = downloadHref || `/api/download/${job.id}`;
 
   return (
     <div className="progress-modal-root" role="presentation">
@@ -257,7 +262,7 @@ export function ProgressModal({
 
         {isDone ? (
           <div className="progress-actions sticky-actions">
-            <a className="download-btn full" href={`/api/download/${job.id}`}>
+            <a className="download-btn full" href={downloadUrl}>
               Download my audio
             </a>
             <button

@@ -10,6 +10,7 @@ import {
 import { getAyahRange } from "./quran-com";
 import { synthesizeTranslationMp3 } from "./tts";
 import { saveResultBuffer } from "./result-store";
+import { saveAudioBlob, saveJobBlob } from "./blob-store";
 
 export async function runProcessingJob(
   jobId: string,
@@ -97,6 +98,8 @@ export async function runProcessingJob(
     await concatMp3Files(clipPaths, resultPath);
 
     const resultBuffer = await fs.readFile(resultPath);
+    const resultUrl = await saveAudioBlob(jobId, resultBuffer, resultName);
+
     const completed = await updateJob(jobId, {
       status: "completed",
       step: "finalizing",
@@ -105,16 +108,19 @@ export async function runProcessingJob(
         'Done! Listen for the word "English" before each translation. Tip: use a short clear recitation of only those verses.',
       resultPath,
       resultFileName: resultName,
+      resultUrl: resultUrl ?? undefined,
     });
 
     saveResultBuffer(jobId, resultBuffer, resultName, completed);
+    await saveJobBlob(completed);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Processing failed";
-    await updateJob(jobId, {
+    const failed = await updateJob(jobId, {
       status: "failed",
       progress: 100,
       message: "We could not finish this file",
       error: message,
     });
+    await saveJobBlob(failed);
   }
 }

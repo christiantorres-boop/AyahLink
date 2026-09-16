@@ -29,6 +29,7 @@ export interface ProcessJob {
   error?: string;
   resultPath?: string;
   resultFileName?: string;
+  resultUrl?: string;
   segments?: AyahSegment[];
   surah: number;
   startAyah: number;

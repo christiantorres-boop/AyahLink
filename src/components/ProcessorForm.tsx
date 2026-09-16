@@ -12,6 +12,8 @@ type JobView = {
   message: string;
   error?: string;
   resultFileName?: string;
+  resultUrl?: string;
+  audioUrl?: string;
   segments?: Array<{
     surah: number;
     ayah: number;
@@ -50,9 +52,27 @@ function friendlyError(raw: string) {
   if (lower.includes("file")) {
     return "We could not read that file. Please try an MP3 or M4A under 25 MB.";
   }
+  if (lower.includes("job not found")) {
+    return "The server finished, but this phone lost the job link. Please try once more.";
+  }
   return raw.length > 140
     ? "Something went wrong. Please check your file and verse numbers, then try again."
     : raw;
+}
+
+function audioUrlFromBase64(base64: string) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return URL.createObjectURL(new Blob([bytes], { type: "audio/mpeg" }));
+}
+
+function resolveAudioUrl(job: JobView) {
+  return job.audioUrl || job.resultUrl || `/api/download/${job.id}?preview=1`;
+}
+
+function resolveDownloadUrl(job: JobView) {
+  return job.audioUrl || job.resultUrl || `/api/download/${job.id}`;
 }
 
 function parseVerseNumber(raw: string, fallback: number) {
@@ -246,7 +266,26 @@ export function ProcessorForm() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Could not start. Please try again.");
 
-      // Load real job status (on Vercel the job is already finished here)
+      // Vercel runs the job in this same request and returns the finished job
+      if (data.mode === "sync" && data.job) {
+        const finished = data.job as JobView;
+        if (data.audioBase64 && typeof data.audioBase64 === "string") {
+          finished.audioUrl = audioUrlFromBase64(data.audioBase64);
+        }
+        setJob(finished);
+        setBusy(false);
+        if (finished.status === "completed") {
+          setTimeout(() => {
+            resultRef.current?.scrollIntoView({
+              behavior: "smooth",
+              block: "center",
+            });
+          }, 400);
+        }
+        return;
+      }
+
+      // Local/async: poll job status
       const statusRes = await fetch(`/api/jobs/${data.jobId}`);
       const statusData = await statusRes.json();
       if (statusRes.ok) {
@@ -474,6 +513,8 @@ export function ProcessorForm() {
       <ProgressModal
         open={modalOpen}
         job={job}
+        audioSrc={job ? resolveAudioUrl(job) : undefined}
+        downloadHref={job ? resolveDownloadUrl(job) : undefined}
         startedAt={startedAt}
         ayahCount={ayahCount}
         surahLabel={selectedSurah?.englishName ?? `Surah ${surah}`}
@@ -493,11 +534,11 @@ export function ProcessorForm() {
               className="preview-audio"
               controls
               preload="metadata"
-              src={`/api/download/${job.id}?preview=1`}
+              src={resolveAudioUrl(job)}
             >
               Your browser cannot play audio preview.
             </audio>
-            <a className="download-btn full" href={`/api/download/${job.id}`}>
+            <a className="download-btn full" href={resolveDownloadUrl(job)}>
               Download my audio
             </a>
             <button
