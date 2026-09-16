@@ -71,7 +71,7 @@ Send the Vercel URL, for example:
 - Use a **short** MP3 (under **25 MB**), ideally one short Surah only
 - First test: **Al-Fatihah**, verses **1-7**
 - Keep the browser tab open until the progress modal finishes
-- Listen for the spoken word **"English"** before each translation
+- You should hear Arabic, then the English translation, then the next verse
 - Hobby Vercel plans have time limits - short files work best
 
 ## Scripts

@@ -117,8 +117,7 @@ export async function synthesizeTranslationMp3(
     throw new Error("Empty translation text for TTS");
   }
 
-  // Speak a short cue so listeners notice English started
-  const spoken = `English. ${cleaned}`;
+  const spoken = cleaned;
   const rawPath = `${outputPath}.raw.mp3`;
 
   let made = false;

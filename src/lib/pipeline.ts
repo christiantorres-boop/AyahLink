@@ -105,7 +105,7 @@ export async function runProcessingJob(
       step: "finalizing",
       progress: 100,
       message:
-        'Done! Listen for the word "English" before each translation. Tip: use a short clear recitation of only those verses.',
+        "Done! Tip: use a short clear recitation of only those verses.",
       resultPath,
       resultFileName: resultName,
       resultUrl: resultUrl ?? undefined,
